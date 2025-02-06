@@ -1,4 +1,4 @@
-FROM python:3.8-slim-buster
+FROM python:3.11-slim-bullseye
   
 ENV LANG C.UTF-8
 ENV TZ=Asia/Seoul
