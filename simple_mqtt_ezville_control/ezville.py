@@ -786,7 +786,7 @@ def ezville_loop(config):
                     soc.sendall(bytes.fromhex(send_data['sendcmd']))
                 except OSError:
                     soc.close()
-                    soc = initiate_socket(soc)
+                    soc = initiate_socket()  # [수정] 괄호 안의 soc 삭제
                     soc.sendall(bytes.fromhex(send_data['sendcmd']))
             if debug:                     
                 log('[DEBUG] Iter. No.: ' + str(i + 1) + ', Target: ' + send_data['statcmd'][1] + ', Current: ' + DEVICE_STATE.get(send_data['statcmd'][0]))
@@ -863,6 +863,7 @@ def ezville_loop(config):
             try:
                 soc = socket.socket()
                 soc.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+                soc.settimeout(3.0)  # [추가] 3초 타임아웃 설정 (무한 대기 방지)
                 connect_socket(soc)
                 return soc
             except ConnectionRefusedError as e:
@@ -886,18 +887,31 @@ def ezville_loop(config):
         
         msg = MSG()
         
+        async def serial_recv_loop():
+        # ... (상단 생략) ...
         while True:
             try:
                 # EW11 버퍼 크기만큼 데이터 받기
                 DATA = soc.recv(EW11_BUFFER_SIZE)
+                
+                # [추가] 빈 데이터가 들어오면 연결이 끊긴 것으로 간주
+                if not DATA:
+                    raise OSError("Connection closed by server")
+
                 msg.topic = EW11_TOPIC + '/recv'
                 msg.payload = DATA   
                 
                 MSG_QUEUE.put(msg)
-                
+
+            except socket.timeout:
+                # [추가] 3초간 데이터가 없으면 그냥 넘어감 (비동기 루프 방해 금지)
+                pass
+            except TimeoutError:
+                # [추가] 파이썬 3 호환용 타임아웃 예외 처리
+                pass
             except OSError:
                 soc.close()
-                soc = initiate_socket(soc)
+                soc = initiate_socket()  # [수정] 괄호 안의 soc 삭제 (오타 수정)
          
             await asyncio.sleep(SERIAL_RECV_DELAY) 
         
